@@ -37,11 +37,12 @@ fi
 # mount /lib/modules and /boot. Also we'll be using localhost
 # to access the apiserver
 using_linuxkit=
-if docker info|grep -s '^Kernel Version: .*-moby$' >/dev/null 2>&1 ||
-     docker info|grep -s '^Kernel Version: .*-linuxkit-' > /dev/null 2>&1; then
-    using_linuxkit=1
+if ! docker info|grep -s '^Operating System: .*Docker for Windows' > /dev/null 2>&1 ; then
+    if docker info|grep -s '^Kernel Version: .*-moby$' >/dev/null 2>&1 ||
+         docker info|grep -s '^Kernel Version: .*-linuxkit-' > /dev/null 2>&1 ; then
+        using_linuxkit=1
+    fi
 fi
-
 # In case of linux as the OS and docker running locally we will be using
 # localhost to access the apiserver nor do we need to add routes
 using_linuxdocker=
@@ -442,15 +443,19 @@ function dind::ensure-volume {
     shift
   fi
   local name="$1"
-  if dind::volume-exists "${name}"; then
-    if [[ ! {reuse_volume} ]]; then
-      docker volume rm "${name}" >/dev/null
-    fi
-  elif [[ ${reuse_volume} ]]; then
-    echo "*** Failed to locate volume: ${name}" 1>&2
-    return 1
+
+  if dind::volume-exists "${name}" ; then
+      if [ ! ${reuse_volume} ]; then
+        #Recreating volume
+        docker volume rm "${name}" >/dev/null
+        dind::create-volume "${name}"
+      else
+        echo "*** Reusing volume: ${name}" 1>&2
+      fi
+  else
+    #Creating volume
+    dind::create-volume "${name}"
   fi
-  dind::create-volume "${name}"
 }
 
 function dind::ensure-dns {
